@@ -1,35 +1,18 @@
-# -----------------------------
-# job_engine.py
-# Core job fetching + scoring logic
-# -----------------------------
-
 import requests
 import pandas as pd
 import os
 
-# -----------------------------
-# Configuration
-# -----------------------------
-
-API_KEY = os.getenv("SERP_API_KEY")   # ✅ Secure API key
-
-
+API_KEY = os.getenv("SERP_API_KEY")
 if not API_KEY:
-    raise ValueError(
-        "SERP_API_KEY not found. Please set it as an environment variable."
-    )
+    raise ValueError("SERP_API_KEY not set")
 
 SEARCH_ROLES = [
     "Data Analyst internship India",
     "Business Analyst internship India",
     "Finance Analyst internship India",
     "Data Scientist internship India",
-    "Data Engineer internship India"
+    "Data Engineer internship India",
 ]
-
-# -----------------------------
-# Company Priority Map
-# -----------------------------
 
 TOP_COMPANIES = {
     "Google": 100,
@@ -145,114 +128,44 @@ TOP_COMPANIES = {
     "Cleartrip": 60
 }
 
-# -----------------------------
-# Helper Functions
-# -----------------------------
-
-def get_priority(company_name: str) -> int:
-    if not company_name:
+def get_priority(company):
+    if not company:
         return 50
-    for key in TOP_COMPANIES:
-        if key.lower() in company_name.lower():
-            return TOP_COMPANIES[key]
+    company = company.lower()
+    for key, score in TOP_COMPANIES.items():
+        if key in company:
+            return score
     return 50
 
 
-def is_recent(posted_text: str) -> bool:
-    if not posted_text:
-        return False
-
-    text = posted_text.lower()
-
-    if "hour" in text or "today" in text:
-        return True
-
-    if "day" in text:
-        try:
-            return int(text.split()[0]) <= 30
-        except:
-            return False
-
-    return False
-
-
-# -----------------------------
-# Main Fetch Function
-# -----------------------------
-
-def fetch_jobs() -> pd.DataFrame:
+def fetch_jobs():
     url = "https://serpapi.com/search.json"
-    all_jobs = []
+    jobs = []
 
     for role in SEARCH_ROLES:
         params = {
             "engine": "google_jobs",
             "q": role,
             "hl": "en",
-            "api_key": API_KEY
+            "api_key": API_KEY,
         }
 
-        response = requests.get(url, params=params, timeout=15)
-        response.raise_for_status()
-        data = response.json()
+        res = requests.get(url, params=params, timeout=10)
+        res.raise_for_status()
 
-        for job in data.get("jobs_results", []):
-            posted = job.get("detected_extensions", {}).get("posted_at", "")
-
-            if not is_recent(posted):
-                continue
-
-            all_jobs.append({
-                "Company": job.get("company_name"),
+        for job in res.json().get("jobs_results", []):
+            company = job.get("company_name")
+            jobs.append({
+                "Company": company,
                 "Role": job.get("title"),
                 "Location": job.get("location"),
-                "Posted": posted,
+                "Posted": job.get("detected_extensions", {}).get("posted_at"),
                 "Apply Link": job.get("apply_options", [{}])[0].get("link"),
-                "Priority": get_priority(job.get("company_name"))
+                "Priority": get_priority(company),
             })
 
-    df_new = pd.DataFrame(all_jobs)
+    df = pd.DataFrame(jobs)
+    df.sort_values(by="Priority", ascending=False, inplace=True)
+    df.drop_duplicates(inplace=True)
 
-   def fetch_jobs() -> pd.DataFrame:
-    url = "https://serpapi.com/search.json"
-    all_jobs = []
-
-    for role in SEARCH_ROLES:
-        params = {
-            "engine": "google_jobs",
-            "q": role,
-            "hl": "en",
-            "api_key": API_KEY
-        }
-
-        response = requests.get(url, params=params, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-
-        for job in data.get("jobs_results", []):
-            posted = job.get("detected_extensions", {}).get("posted_at", "")
-
-            if not is_recent(posted):
-                continue
-
-            all_jobs.append({
-                "Company": job.get("company_name"),
-                "Role": job.get("title"),
-                "Location": job.get("location"),
-                "Posted": posted,
-                "Apply Link": job.get("apply_options", [{}])[0].get("link"),
-                "Priority": get_priority(job.get("company_name"))
-            })
-
-    df_new = pd.DataFrame(all_jobs)
-
-    df_new.drop_duplicates(
-        subset=["Company", "Role", "Location", "Apply Link"],
-        inplace=True
-    )
-
-    df_new.sort_values(by="Priority", ascending=False, inplace=True)
-
-    return df_new
-
-
+    return df

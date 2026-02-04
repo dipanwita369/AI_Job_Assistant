@@ -1,3 +1,3 @@
 @echo off
-cd /d C:\Users\soumi\Desktop\AI_Job_Assistant\jobs
-python job_engine.py
+cd C:\Users\soumi\Desktop\AI_Job_Assistant
+python -c "from job_engine import fetch_jobs; fetch_jobs()"
