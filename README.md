@@ -1,4 +1,8 @@
-# AI Job Assistant 🚀
+# AI Job Assistant 🚀 
+
+## 🔗 Live Demo
+https://ai-job-assistant.streamlit.app
+
 
 An automated Python-based job tracking system that fetches the latest internship opportunities in India using Google Jobs API, prioritizes top companies, filters recent postings, and notifies users in real time.
 
