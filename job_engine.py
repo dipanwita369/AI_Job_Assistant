@@ -1,8 +1,12 @@
+# job_engine.py
 import requests
 import pandas as pd
 import os
+import re
+from datetime import datetime, timedelta
 
 API_KEY = os.getenv("SERP_API_KEY")
+
 if not API_KEY:
     raise ValueError("SERP_API_KEY not set")
 
@@ -11,131 +15,33 @@ SEARCH_ROLES = [
     "Business Analyst internship India",
     "Finance Analyst internship India",
     "Data Scientist internship India",
-    "Data Engineer internship India",
+    "Data Engineer internship India"
 ]
 
-TOP_COMPANIES = {
-    "Google": 100,
-    "Amazon": 100,
-    "Microsoft": 100,
-    "Meta": 100,
-    "Apple": 100,
-    "Netflix": 100,
-    "Databricks": 100,
-    "Anthropic": 100,
-    "Hugging Face": 100,
-    "Salesforce": 100,
-    "ServiceNow": 100,
-    "Adobe": 100,
-    "Atlassian": 100,
-    "MongoDB": 100,
 
-    "Goldman Sachs": 100,
-    "Capital One": 100,
-    "American Express": 100,
-    "Mastercard": 100,
-    "Visa": 100,
-    "Stripe": 100,
-    "Square": 100,
-    "PayPal": 100,
-    "Coinbase": 100,
-    "Klarna": 100,
-    "Revolut": 100,
-    "Wise": 100,
+def parse_posted_date(text):
+    if not text:
+        return None
 
-     "PhonePe": 90,
-    "Razorpay": 90,
-    "Zerodha": 90,
-    "Groww": 90,
-    "CRED": 90,
-    "Paytm": 90,
-    "Navi": 90,
-    "BharatPe": 90,
-    "INDmoney": 90,
-    "Upstox": 90,
-    "Jupiter": 90,
-    "Slice": 90,
-    "Fi": 90,
-    "Cashfree Payments": 90,
-    "Juspay": 90,
+    text = text.lower()
 
-    "Flipkart": 90,
-    "Myntra": 90,
-    "Meesho": 90,
-    "Swiggy": 90,
-    "Zomato": 90,
-    "Blinkit": 90,
-    "Zepto": 90,
-    "Ola": 90,
-    "Dream11": 90,
-    "Cure.fit": 90,
+    if "today" in text or "just" in text:
+        return datetime.today()
 
-     "Walmart": 80,
-    "Target": 80,
-    "Tesco": 80,
-    "SAP Labs": 80,
-    "Cisco": 80,
-    "Dell": 80,
-    "Siemens": 80,
-    "Honeywell": 80,
-    "Intel": 80,
-    "AMD": 80,
-    "Arista Networks": 80,
-    "Infoblox": 80,
-    "Autodesk": 80,
-    "Qlik": 80,
-    "BMC Software": 80,
-    "Nielsen": 80,
-    "Sprinklr": 80,
-    "Zscaler": 80,
-    "HighRadius": 80,
-    "Darwinbox": 80,
-    "Eightfold": 80,
+    match = re.search(r"(\d+)\s+(day|week|month)", text)
+    if not match:
+        return None
 
-    "Deloitte": 70,
-    "Deloitte HashedIn": 70,
-    "Accenture": 70,
-    "IBM": 70,
-    "Oracle": 70,
-    "EPAM Systems": 70,
-    "Persistent Systems": 70,
-    "Tata Elxsi": 70,
-    "Infosys": 70,
-    "Wipro": 70,
-    "Cognizant": 70,
-    "Capgemini": 70,
-    "HCL Tech": 70,
-    "Tech Mahindra": 70,
-    "Mphasis": 70,
-    "Hexaware": 70,
-    "Zensar": 70,
-    "Nagarro": 70,
-    "Synechron": 70,
+    value, unit = int(match.group(1)), match.group(2)
 
-    "BYJU'S": 60,
-    "Physics Wallah": 60,
-    "Unacademy": 60,
-    "Testbook": 60,
-    "Adda247": 60,
-    "Allen": 60,
-    "Coding Ninjas": 60,
-    "GeeksforGeeks": 60,
-    "Chegg": 60,
-    "Groupon": 60,
-    "MamaEarth": 60,
-    "Urban Company": 60,
-    "redBus": 60,
-    "Cleartrip": 60
-}
+    if unit == "day":
+        return datetime.today() - timedelta(days=value)
+    if unit == "week":
+        return datetime.today() - timedelta(weeks=value)
+    if unit == "month":
+        return datetime.today() - timedelta(days=value * 30)
 
-def get_priority(company):
-    if not company:
-        return 50
-    company = company.lower()
-    for key, score in TOP_COMPANIES.items():
-        if key in company:
-            return score
-    return 50
+    return None
 
 
 def fetch_jobs():
@@ -147,25 +53,39 @@ def fetch_jobs():
             "engine": "google_jobs",
             "q": role,
             "hl": "en",
-            "api_key": API_KEY,
+            "api_key": API_KEY
         }
 
-        res = requests.get(url, params=params, timeout=10)
+        res = requests.get(url, params=params, timeout=20)
         res.raise_for_status()
+        data = res.json()
 
-        for job in res.json().get("jobs_results", []):
-            company = job.get("company_name")
+        for job in data.get("jobs_results", []):
+            posted_text = job.get("detected_extensions", {}).get("posted_at", "")
+            posted_date = parse_posted_date(posted_text)
+
+            if not posted_date:
+                continue
+
+            if (datetime.today() - posted_date).days > 30:
+                continue
+
             jobs.append({
-                "Company": company,
+                "Company": job.get("company_name"),
                 "Role": job.get("title"),
                 "Location": job.get("location"),
-                "Posted": job.get("detected_extensions", {}).get("posted_at"),
-                "Apply Link": job.get("apply_options", [{}])[0].get("link"),
-                "Priority": get_priority(company),
+                "Posted": posted_text,
+                "Posted_Date": posted_date,
+                "Apply Link": job.get("apply_options", [{}])[0].get("link")
             })
 
     df = pd.DataFrame(jobs)
-    df.sort_values(by="Priority", ascending=False, inplace=True)
-    df.drop_duplicates(inplace=True)
+
+    if df.empty:
+        return df
+
+    df.sort_values("Posted_Date", ascending=False, inplace=True)
+    df.drop(columns=["Posted_Date"], inplace=True)
+    df.reset_index(drop=True, inplace=True)
 
     return df
