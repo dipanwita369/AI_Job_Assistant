@@ -12,7 +12,7 @@ import os
 # -----------------------------
 
 API_KEY = os.getenv("SERP_API_KEY")   # ✅ Secure API key
-EXCEL_FILE = "jobs_final.xlsx"
+
 
 if not API_KEY:
     raise ValueError(
@@ -213,20 +213,46 @@ def fetch_jobs() -> pd.DataFrame:
 
     df_new = pd.DataFrame(all_jobs)
 
-    # Load existing jobs
-    if os.path.exists(EXCEL_FILE):
-        df_old = pd.read_excel(EXCEL_FILE)
-    else:
-        df_old = pd.DataFrame()
+   def fetch_jobs() -> pd.DataFrame:
+    url = "https://serpapi.com/search.json"
+    all_jobs = []
 
-    # Merge & clean
-    df_final = pd.concat([df_old, df_new], ignore_index=True)
-    df_final.drop_duplicates(
+    for role in SEARCH_ROLES:
+        params = {
+            "engine": "google_jobs",
+            "q": role,
+            "hl": "en",
+            "api_key": API_KEY
+        }
+
+        response = requests.get(url, params=params, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+
+        for job in data.get("jobs_results", []):
+            posted = job.get("detected_extensions", {}).get("posted_at", "")
+
+            if not is_recent(posted):
+                continue
+
+            all_jobs.append({
+                "Company": job.get("company_name"),
+                "Role": job.get("title"),
+                "Location": job.get("location"),
+                "Posted": posted,
+                "Apply Link": job.get("apply_options", [{}])[0].get("link"),
+                "Priority": get_priority(job.get("company_name"))
+            })
+
+    df_new = pd.DataFrame(all_jobs)
+
+    df_new.drop_duplicates(
         subset=["Company", "Role", "Location", "Apply Link"],
         inplace=True
     )
 
-    df_final.sort_values(by="Priority", ascending=False, inplace=True)
-    df_final.to_excel(EXCEL_FILE, index=False)
+    df_new.sort_values(by="Priority", ascending=False, inplace=True)
 
-    return df_final
+    return df_new
+
+
