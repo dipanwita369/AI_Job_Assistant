@@ -15,7 +15,8 @@ SEARCH_ROLES = [
     "Business Analyst internship India",
     "Finance Analyst internship India",
     "Data Scientist internship India",
-    "Data Engineer internship India"
+    "Python Developer Intern",
+    "Platform Intern"
 ]
 
 
